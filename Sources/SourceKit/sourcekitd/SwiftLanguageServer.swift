@@ -494,6 +494,21 @@ extension SwiftLanguageServer {
     return startIndex
   }
 
+  func findKey(text: String, offset: Int) -> String {
+      let maxIter = 6
+
+      var key = "" // watchout! "" can be the prefix of anything
+      for i in 0 ..< maxIter {
+          guard let index = text.index(text.startIndex, offsetBy: offset + i, limitedBy: text.endIndex) else { break }
+          let ch = String(text[index])
+
+          if !ch.isAlphanumeric() { break }
+          key += ch
+      }
+
+      return key.lowercased()
+  }
+
   public func completion(_ req: Request<CompletionRequest>) {
     let keys = self.keys
 
@@ -522,12 +537,12 @@ extension SwiftLanguageServer {
       skreq[keys.sourcefile] = snapshot.document.uri.pseudoPath
       skreq[keys.sourcetext] = snapshot.text
 
-      let currentText = snapshot.text
-      let index = currentText.index(currentText.startIndex, offsetBy: offset, limitedBy: currentText.endIndex)
-      let key = index != nil ? String(snapshot.text[index!]) : "" // watchout! "" can be the prefix of anything
+      let key = self.findKey(text: snapshot.text, offset: offset)
       let shouldFilterPrefix = key.isAlphanumeric() ? true : false
 
-      let notAllowedKind: Set<CompletionItemKind> = [.variable, .function, .typeParameter]
+      // add the types you don't want to complete here
+      //let notAllowedKind: Set<CompletionItemKind> = [.variable, .function, .typeParameter]
+      let notAllowedKind: Set<CompletionItemKind> = []
 
       let skreqOptions = SKRequestDictionary(sourcekitd: self.sourcekitd)
       skreqOptions[keys.codecomplete_sort_byname] = 1
@@ -561,10 +576,10 @@ extension SwiftLanguageServer {
         var result = CompletionList(isIncomplete: false, items: [])
         var isInComplete = false
 
-        let MaxCount = 20
+        let MaxCount = 20 // return at most 20 results
         var itemCount = 0
 
-        log("=== Hai start=\(startIndex) key=\(key) \(snapshot.document.uri.pseudoPath)", level: .warning)
+        //log("=== Hai start=\(startIndex) key=\(key) \(snapshot.document.uri.pseudoPath)", level: .warning)
         completions.forEach(beginFrom: startIndex) { (i, value) -> Bool in
           guard let name: String = value[self.keys.description] else {
             return true // continue
@@ -1475,15 +1490,9 @@ extension sourcekitd_uid_t {
 }
 
 extension String {
-
     func isAlphanumeric() -> Bool {
-        return self.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil && self != ""
-    }
-
-    func isSnake() -> Bool { 
-        if !self.contains("_") { return false }
-        if self.lowercased() == self { return true }
-        if self.uppercased() == self { return true }
-        return false
+        let charSet = NSMutableCharacterSet(charactersIn: "_")
+        charSet.formUnion(with: CharacterSet.alphanumerics)
+        return self.rangeOfCharacter(from: charSet.inverted) == nil && self != ""
     }
 }
