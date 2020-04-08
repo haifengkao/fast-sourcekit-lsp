@@ -559,12 +559,13 @@ extension SwiftLanguageServer {
         }
 
         var result = CompletionList(isIncomplete: false, items: [])
+        var isInComplete = false
 
         let MaxCount = 20
         var itemCount = 0
 
         log("=== Hai start=\(startIndex) key=\(key) \(snapshot.document.uri.pseudoPath)", level: .warning)
-        let cancelled = !completions.forEach(beginFrom: startIndex) { (i, value) -> Bool in
+        completions.forEach(beginFrom: startIndex) { (i, value) -> Bool in
           guard let name: String = value[self.keys.description] else {
             return true // continue
           }
@@ -586,6 +587,7 @@ extension SwiftLanguageServer {
 
           itemCount = itemCount + 1
           if itemCount > MaxCount {
+            isInComplete = true
             return false
           }
 
@@ -636,7 +638,7 @@ extension SwiftLanguageServer {
           return true
         }
 
-        if cancelled {
+        if isInComplete {
             result.isIncomplete = true // we have more data to show. but it exceeds maxCount
         }
         req.reply(result)
