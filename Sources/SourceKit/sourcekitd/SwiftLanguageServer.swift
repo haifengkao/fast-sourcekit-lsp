@@ -18,6 +18,7 @@ import SKCore
 import SKSupport
 import sourcekitd
 import TSCBasic
+import Foundation // for ComparisonResult
 
 fileprivate extension Range {
   /// Checks if this range overlaps with the other range, counting an overlap with an empty range as a valid overlap.
@@ -432,6 +433,67 @@ extension SwiftLanguageServer {
     return false
   }
 
+  func findFirst(key: String, index: Int, compare: (Int, String) -> ComparisonResult) -> Int
+  {
+      // the index has to be correct
+      assert(compare(index, key) == .orderedSame)
+      
+      var i = index - 1
+      while i >= 0 {
+          if compare(i, key) != .orderedSame {
+              return i+1
+          }
+          
+          i -= 1
+      }
+      
+      return index
+  }
+
+  func binarySearch(key: String, range: Range<Int>, compare: (Int, String) -> ComparisonResult) -> Int? {
+      if range.lowerBound >= range.upperBound {
+          // If we get here, then the search key is not present in the array.
+        return nil
+      } else {
+          // Calculate where to split the array.
+          let midIndex = range.lowerBound + (range.upperBound - range.lowerBound) / 2
+
+          // Is the search key in the left half?
+          if compare(midIndex, key) == .orderedDescending {
+              return binarySearch(key: key, range: range.lowerBound ..< midIndex, compare: compare)
+
+              // Is the search key in the right half?
+          } else if compare(midIndex, key) == .orderedAscending {
+              return binarySearch(key: key, range: midIndex + 1 ..< range.upperBound, compare: compare)
+
+              // If we get here, then we've found the search key!
+          } else {
+              return findFirst(key: key, index: midIndex, compare: compare)
+          }
+      }
+  }
+
+  func findStartIndex(completions: SKResponseArray, key: String) -> Int? {
+    let arr = completions.array
+    let resp = completions.resp
+    
+    let startIndex = binarySearch(key: key, range: 0 ..< completions.count) { (index, key) -> ComparisonResult in
+      let value = SKResponseDictionary(sourcekitd.api.variant_array_get_value(arr, index), response: resp)
+      let filterName: String? = value[self.keys.name]
+
+      
+      guard let str = filterName?.lowercased() else { 
+          return  .orderedSame 
+      } // incorrect. but there is nothing we can do
+
+      if str.hasPrefix(key) { return .orderedSame }
+      if str < key { return .orderedAscending }
+      return .orderedDescending
+    }
+
+    return startIndex
+  }
+
   public func completion(_ req: Request<CompletionRequest>) {
     let keys = self.keys
 
@@ -460,6 +522,13 @@ extension SwiftLanguageServer {
       skreq[keys.sourcefile] = snapshot.document.uri.pseudoPath
       skreq[keys.sourcetext] = snapshot.text
 
+      let currentText = snapshot.text
+      let index = currentText.index(currentText.startIndex, offsetBy: offset, limitedBy: currentText.endIndex)
+      let key = index != nil ? String(snapshot.text[index!]) : "" // watchout! "" can be the prefix of anything
+      let shouldFilterPrefix = key.isAlphanumeric() ? true : false
+
+      let notAllowedKind: Set<CompletionItemKind> = [.variable, .function, .typeParameter]
+
       let skreqOptions = SKRequestDictionary(sourcekitd: self.sourcekitd)
       skreqOptions[keys.codecomplete_sort_byname] = 1
       skreq[keys.codecomplete_options] = skreqOptions
@@ -483,9 +552,19 @@ extension SwiftLanguageServer {
           return
         }
 
+        guard let startIndex = !shouldFilterPrefix ? 0 : self.findStartIndex(completions: completions, key: key) else {
+          log("=== Hai failed to find start index")
+          req.reply(CompletionList(isIncomplete: false, items: []))
+          return
+        }
+
         var result = CompletionList(isIncomplete: false, items: [])
 
-        let cancelled = !completions.forEach { (i, value) -> Bool in
+        let MaxCount = 20
+        var itemCount = 0
+
+        log("=== Hai start=\(startIndex) key=\(key) \(snapshot.document.uri.pseudoPath)", level: .warning)
+        let cancelled = !completions.forEach(beginFrom: startIndex) { (i, value) -> Bool in
           guard let name: String = value[self.keys.description] else {
             return true // continue
           }
@@ -493,6 +572,22 @@ extension SwiftLanguageServer {
           var filterName: String? = value[self.keys.name]
           let insertText: String? = value[self.keys.sourcetext]
           let typeName: String? = value[self.keys.typename]
+
+          if let filterName = filterName {
+            if shouldFilterPrefix && !filterName.lowercased().hasPrefix(key){
+              return false // continue. no more strings with prefix. assume the values are sorted
+            }
+          }
+
+          let kindValue = value[self.keys.kind]?.asCompletionItemKind(self.values) ?? .value
+          if notAllowedKind.contains(kindValue) {
+            return true // continue
+          }
+
+          itemCount = itemCount + 1
+          if itemCount > MaxCount {
+            return false
+          }
 
           let clientCompletionCapabilities = self.clientCapabilities.textDocument?.completion
           let clientSupportsSnippets = clientCompletionCapabilities?.completionItem?.snippetSupport == true
@@ -525,6 +620,7 @@ extension SwiftLanguageServer {
           let notRecommended = (value[self.keys.not_recommended] as Int?).map({ $0 != 0 })
 
           let kind: sourcekitd_uid_t? = value[self.keys.kind]
+          //log("=== Hai3 \(kind?.asCompletionItemKind(self.values) ?? .value)=\(name)= \(typeName ?? "")=\(filterName ?? "")=\(text ?? "")", level: .warning)
           result.items.append(CompletionItem(
             label: name,
             kind: kind?.asCompletionItemKind(self.values) ?? .value,
@@ -540,9 +636,10 @@ extension SwiftLanguageServer {
           return true
         }
 
-        if !cancelled {
-          req.reply(result)
+        if cancelled {
+            result.isIncomplete = true // we have more data to show. but it exceeds maxCount
         }
+        req.reply(result)
       }
 
       // FIXME: cancellation
@@ -1373,4 +1470,18 @@ extension sourcekitd_uid_t {
         return nil
     }
   }
+}
+
+extension String {
+
+    func isAlphanumeric() -> Bool {
+        return self.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil && self != ""
+    }
+
+    func isSnake() -> Bool { 
+        if !self.contains("_") { return false }
+        if self.lowercased() == self { return true }
+        if self.uppercased() == self { return true }
+        return false
+    }
 }

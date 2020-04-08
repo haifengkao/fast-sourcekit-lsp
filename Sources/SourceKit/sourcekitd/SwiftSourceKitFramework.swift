@@ -654,6 +654,17 @@ final class SKResponseArray {
     }
     return true
   }
+
+  /// If the `applier` returns `false`, iteration terminates.
+  @discardableResult
+  func forEach(beginFrom: Int,  applier: (Int, SKResponseDictionary) -> Bool) -> Bool {
+    for i in beginFrom..<count {
+      if !applier(i, SKResponseDictionary(sourcekitd.api.variant_array_get_value(array, i), response: resp)) {
+        return false
+      }
+    }
+    return true
+  }
 }
 
 extension SKRequestDictionary: CustomStringConvertible {
