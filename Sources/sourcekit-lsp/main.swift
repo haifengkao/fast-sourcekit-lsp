@@ -17,8 +17,8 @@ import LanguageServerProtocolJSONRPC
 import LSPLogging
 import SKCore
 import SKSupport
-import SourceKit
-import sourcekitd // Not needed here, but fixes debugging...
+import SourceKitLSP
+import Csourcekitd // Not needed here, but fixes debugging...
 import TSCBasic
 import TSCLibc
 import TSCUtility
@@ -121,7 +121,8 @@ let server = SourceKitServer(client: clientConnection, options: options.serverOp
 })
 clientConnection.start(receiveHandler: server, closeHandler: {
   server.prepareForExit()
-  exit(0)
+  // Use _Exit to avoid running static destructors due to SR-12668.
+  _Exit(0)
 })
 
 Logger.shared.addLogHandler { message, _ in

@@ -10,6 +10,11 @@ let package = Package(
         targets: ["sourcekit-lsp"]
       ),
       .library(
+        name: "_SourceKitLSP",
+        type: .dynamic,
+        targets: ["SourceKitLSP"]
+      ),
+      .library(
         name: "LSPBindings",
         type: .static,
         targets: [
@@ -26,40 +31,44 @@ let package = Package(
         name: "sourcekit-lsp",
         dependencies: [
           "LanguageServerProtocolJSONRPC",
-          "SourceKit",
+          "SourceKitLSP",
           "SwiftToolsSupport-auto",
         ]
       ),
 
       .target(
-        name: "SourceKit",
+        name: "SourceKitLSP",
         dependencies: [
-          "Csourcekitd",
           "BuildServerProtocol",
           "IndexStoreDB",
           "LanguageServerProtocol",
           "LanguageServerProtocolJSONRPC",
           "SKCore",
+          "SourceKitD",
           "SKSwiftPMWorkspace",
           "SwiftToolsSupport-auto",
         ]
       ),
 
       .target(
+        name: "CSKTestSupport",
+        dependencies: []),
+      .target(
         name: "SKTestSupport",
         dependencies: [
+          "CSKTestSupport",
           "ISDBTestSupport",
           "LSPTestSupport",
-          "SourceKit",
+          "SourceKitLSP",
           "tibs", // Never imported, needed at runtime
           "SwiftToolsSupport-auto",
         ]
       ),
       .testTarget(
-        name: "SourceKitTests",
+        name: "SourceKitLSPTests",
         dependencies: [
           "SKTestSupport",
-          "SourceKit",
+          "SourceKitLSP",
         ]
       ),
 
@@ -81,17 +90,12 @@ let package = Package(
         ]
       ),
 
-      // Csourcekitd: C modules wrapper for sourcekitd.
-      .target(
-        name: "Csourcekitd",
-        dependencies: []
-      ),
-
       // SKCore: Data structures and algorithms useful across the project, but not necessarily
       // suitable for use in other packages.
       .target(
         name: "SKCore",
         dependencies: [
+          "SourceKitD",
           "BuildServerProtocol",
           "LanguageServerProtocol",
           "LanguageServerProtocolJSONRPC",
@@ -105,6 +109,31 @@ let package = Package(
           "SKCore",
           "SKTestSupport",
         ]
+      ),
+
+      // SourceKitD: Swift bindings for sourcekitd.
+      .target(
+        name: "SourceKitD",
+        dependencies: [
+          "Csourcekitd",
+          "LSPLogging",
+          "SKSupport",
+          "SwiftToolsSupport-auto",
+        ]
+      ),
+      .testTarget(
+        name: "SourceKitDTests",
+        dependencies: [
+          "SourceKitD",
+          "SKCore",
+          "SKTestSupport",
+        ]
+      ),
+
+      // Csourcekitd: C modules wrapper for sourcekitd.
+      .target(
+        name: "Csourcekitd",
+        dependencies: []
       ),
 
       // Logging support used in LSP modules.

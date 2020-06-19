@@ -29,6 +29,7 @@ extension BuildSystemManagerTests {
         ("testSettingsMainFileInitialIntersect", testSettingsMainFileInitialIntersect),
         ("testSettingsMainFileInitialNil", testSettingsMainFileInitialNil),
         ("testSettingsMainFileUnchanged", testSettingsMainFileUnchanged),
+        ("testSettingsMainFileWithFallback", testSettingsMainFileWithFallback),
         ("testSettingsOneMainTwoHeader", testSettingsOneMainTwoHeader),
     ]
 }

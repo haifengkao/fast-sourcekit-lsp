@@ -24,16 +24,8 @@ public struct FileBuildSettings: Equatable {
   /// The working directory to resolve any relative paths in `compilerArguments`.
   public var workingDirectory: String? = nil
 
-  /// The language of this file.
-  public var language: Language
-
-  public init(
-    compilerArguments: [String],
-    workingDirectory: String? = nil,
-    language: Language)
-  {
+  public init(compilerArguments: [String], workingDirectory: String? = nil) {
     self.compilerArguments = compilerArguments
     self.workingDirectory = workingDirectory
-    self.language = language
   }
 }
