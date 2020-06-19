@@ -544,8 +544,8 @@ extension SwiftLanguageServer {
       let shouldFilterPrefix = key.isAlphanumeric() ? true : false
 
       // add the types you don't want to complete here
-      //let notAllowedKind: Set<CompletionItemKind> = [.variable, .function, .typeParameter]
-      let notAllowedKind: Set<CompletionItemKind> = []
+      let notAllowedKind: Set<CompletionItemKind> = [.variable, .function, .typeParameter]
+      //let notAllowedKind: Set<CompletionItemKind> = []
 
       let skreqOptions = SKDRequestDictionary(sourcekitd: self.sourcekitd)
       skreqOptions[keys.codecomplete_sort_byname] = 1
